@@ -1,0 +1,114 @@
+# Load the CSV, parse dates, and create requested visualizations.
+# We'll: read data, clean/parse dates, create helpful time columns, and plot the charts.
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Read CSV with specified encoding and parse dates where possible
+csv_path = 'Daily Household Transactions.csv'
+df_tx = pd.read_csv(csv_path, encoding='ascii')
+
+# Parse Date column to datetime (handles mixed formats); coerce errors to NaT
+# Also create a pure date (day) and month period for grouping
+ df_tx['DateTime'] = pd.to_datetime(df_tx['Date'], errors='coerce', dayfirst=True, infer_datetime_format=True)
+df_tx['DateOnly'] = df_tx['DateTime'].dt.date
+
+# Ensure Amount is numeric
+ df_tx['Amount'] = pd.to_numeric(df_tx['Amount'], errors='coerce')
+
+# Create Month start date for monthly aggregations
+ df_tx['Month'] = df_tx['DateTime'].dt.to_period('M').dt.to_timestamp()
+
+# Set style
+sns.set(style='whitegrid')
+
+# 1) Line chart: total Amount by DateOnly separated by Income/Expense
+agg1 = df_tx.groupby(['DateOnly', 'Income/Expense'], dropna=False)['Amount'].sum().reset_index()
+agg1 = agg1.sort_values('DateOnly')
+plt.figure(figsize=(10,5))
+sns.lineplot(data=agg1, x='DateOnly', y='Amount', hue='Income/Expense', marker='o')
+plt.title('Daily Total Amount by Income/Expense')
+plt.xlabel('Date')
+plt.ylabel('Total Amount')
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()
+print('Plotted daily cash flow line chart')
+
+# 2) Bar chart: total Amount by Category
+agg2 = df_tx.groupby('Category', dropna=False)['Amount'].sum().reset_index().sort_values('Amount', ascending=False)
+plt.figure(figsize=(10,5))
+sns.barplot(data=agg2, x='Category', y='Amount', color='#4C78A8')
+plt.title('Total Amount by Category')
+plt.xlabel('Category')
+plt.ylabel('Total Amount')
+plt.xticks(rotation=45, ha='right')
+plt.tight_layout()
+plt.show()
+print('Plotted total by Category bar chart')
+
+# 3) Stacked monthly expenditure by Mode (only Expense)
+exp_df = df_tx[df_tx['Income/Expense'].str.lower() == 'expense'] if 'Income/Expense' in df_tx.columns else df_tx.copy()
+agg3 = exp_df.groupby(['Month', 'Mode'])['Amount'].sum().reset_index()
+piv3 = agg3.pivot(index='Month', columns='Mode', values='Amount').fillna(0)
+
+plt.figure(figsize=(11,6))
+piv3.sort_index().plot(kind='area', stacked=True, figsize=(11,6), cmap='tab20')
+plt.title('Monthly Expense Amounts by Mode (Stacked Area)')
+plt.xlabel('Month')
+plt.ylabel('Total Expense Amount')
+plt.legend(title='Mode', bbox_to_anchor=(1.05, 1), loc='upper left')
+plt.tight_layout()
+plt.show()
+print('Plotted monthly stacked area chart by Mode for expenses')
+
+# 4) Horizontal bar: top 10 Subcategory by count of transactions (all types)
+agg4 = df_tx['Subcategory'].value_counts().reset_index()
+agg4.columns = ['Subcategory', 'Count']
+agg4_top10 = agg4.head(10)
+plt.figure(figsize=(10,6))
+sns.barplot(data=agg4_top10, y='Subcategory', x='Count', orient='h', color='#F58518')
+plt.title('Top 10 Subcategories by Transaction Count')
+plt.xlabel('Count of Transactions')
+plt.ylabel('Subcategory')
+plt.tight_layout()
+plt.show()
+print('Plotted top 10 subcategories by count')
+
+# 5) Histogram of Amount for expense transactions
+exp_amt = exp_df['Amount'].dropna()
+plt.figure(figsize=(9,5))
+sns.histplot(exp_amt, bins=20, kde=True, color='#54A24B')
+plt.title('Distribution of Expense Amounts')
+plt.xlabel('Amount')
+plt.ylabel('Frequency')
+plt.tight_layout()
+plt.show()
+print('Plotted histogram of expense amounts')
+
+# 6) Monthly expense trends aggregated by Category (area chart)
+agg6 = exp_df.groupby(['Month', 'Category'])['Amount'].sum().reset_index()
+piv6 = agg6.pivot(index='Month', columns='Category', values='Amount').fillna(0)
+plt.figure(figsize=(11,6))
+piv6.sort_index().plot(kind='area', stacked=True, figsize=(11,6), cmap='Set2')
+plt.title('Monthly Expense Trends by Category')
+plt.xlabel('Month')
+plt.ylabel('Total Expense Amount')
+plt.legend(title='Category', bbox_to_anchor=(1.05, 1), loc='upper left')
+plt.tight_layout()
+plt.show()
+print('Plotted monthly expense trends by Category')
+
+# 7) Pie chart: percentage of total expenses by Mode
+agg7 = exp_df.groupby('Mode')['Amount'].sum().reset_index()
+plt.figure(figsize=(7,7))
+plt.pie(agg7['Amount'], labels=agg7['Mode'], autopct='%1.1f%%', startangle=140)
+plt.title('Share of Total Expenses by Mode')
+plt.tight_layout()
+plt.show()
+print('Plotted expense share by Mode pie chart')
+
+# Show head for quick data preview
+print(df_tx.head())
